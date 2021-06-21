@@ -1,7 +1,7 @@
 const connection = require('../db-config');
 const Joi = require('joi');
 
-const db = connection.promise();
+const db = connection;
 
 const validate = (data, forCreation = true) => {
   const presence = forCreation ? 'required' : 'optional';

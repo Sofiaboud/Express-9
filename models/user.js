@@ -1,17 +1,33 @@
 const connection = require('../db-config');
 const Joi = require('joi');
+const argon2 = require('argon2');
 
-const db = connection.promise();
+const db = connection;
 
-const validate = (firstname, lastname, email, forCreation = true) => {
+const hashingOptions = {
+  type: argon2.argon2id,
+  memoryCost: 2 ** 16,
+  timeCost: 5,
+  parallelism: 1,
+};
+
+const hashPassword = (plainPassword) => {
+  return argon2.hash(plainPassword, hashingOptions);
+};
+
+const verifyPassword = (plainPassword, hashedPassword) => {
+  return argon2.verify(hashedPassword, plainPassword, hashingOptions);
+};
+
+const validate = (data, forCreation = true) => {
   const presence = forCreation ? 'required' : 'optional';
   return Joi.object({
-    email: Joi.string().email().max(255).required(),
-    firstname: Joi.string().max(255).required(),
-    lastname: Joi.string().max(255).required(),
-    city: Joi.string().max(255).required(),
-    language: Joi.string().max(255).required(),
-  }).validate({ firstname, lastname, email }, { abortEarly: false }).error;
+    email: Joi.string().email().max(255).presence(presence),
+    firstname: Joi.string().max(255).presence(presence),
+    lastname: Joi.string().max(255).presence(presence),
+    city: Joi.string().allow(null, '').max(255),
+    language: Joi.string().allow(null, '').max(255),
+  }).validate(data, { abortEarly: false }).error;
 };
 
 const findMany = ({ filters: { language } }) => {
@@ -31,16 +47,23 @@ const findOne = (id) => {
     .then(([results]) => results[0]);
 };
 
-const create = ({ title, director, year, color, duration }) => {
+const findByEmail = (email) => {
   return db
-    .query(
-      'INSERT INTO users (firstname, lastname, email, city, language) VALUES (?, ?, ?, ?, ?)',
-      [firstname, lastname, email, city, language]
-    )
-    .then(([result]) => {
-      const id = result.insertId;
-      return { id: insertId, firstname, lastname, email };
-    });
+    .query('SELECT * FROM users WHERE email = ?', [email])
+    .then(([results]) => results[0]);
+};
+
+const findByEmailWithDifferentId = (email, id) => {
+  return db
+    .query('SELECT * FROM users WHERE email = ? AND id <> ?', [email, id])
+    .then(([results]) => results[0]);
+};
+
+const create = (data) => {
+  return db.query('INSERT INTO users SET ?', data).then(([result]) => {
+    const id = result.insertId;
+    return { ...data, id };
+  });
 };
 
 const update = (id, newAttributes) => {
@@ -60,4 +83,8 @@ module.exports = {
   create,
   update,
   destroy,
+  findByEmail,
+  findByEmailWithDifferentId,
+  hashPassword,
+  verifyPassword,
 };
